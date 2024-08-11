@@ -1,0 +1,7 @@
+numpy
+pillow
+lxml
+tinydb
+mido
+chardet
+beautifulsoup4

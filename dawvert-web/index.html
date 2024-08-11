@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  
+  <title>Saving MIDI from Caustic3</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+  <style>
+    .right-aligned {
+      text-align: right;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark bg-primary">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">Saving MIDI from Caustic3 🙂</span>
+      <span class="navbar-brand mb-0">Proof of Concept Version</span>
+
+    </div>
+  </nav>
+  <!--
+  <div id="drop-area">
+    drop-area<br>
+  </div>
+-->
+<p class="right-aligned">
+  <a href="https://github.com/koi-ikeno/DawVert" target="_blank" class="mx-3" aria-label="Github" title="Github">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        style="fill: currentColor;transform: ;msFilter:;"
+        ><path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M12.026 2c-5.509 0-9.974 4.465-9.974 9.974 0 4.406 2.857 8.145 6.821 9.465.499.09.679-.217.679-.481 0-.237-.008-.865-.011-1.696-2.775.602-3.361-1.338-3.361-1.338-.452-1.152-1.107-1.459-1.107-1.459-.905-.619.069-.605.069-.605 1.002.07 1.527 1.028 1.527 1.028.89 1.524 2.336 1.084 2.902.829.091-.645.351-1.085.635-1.334-2.214-.251-4.542-1.107-4.542-4.93 0-1.087.389-1.979 1.024-2.675-.101-.253-.446-1.268.099-2.64 0 0 .837-.269 2.742 1.021a9.582 9.582 0 0 1 2.496-.336 9.554 9.554 0 0 1 2.496.336c1.906-1.291 2.742-1.021 2.742-1.021.545 1.372.203 2.387.099 2.64.64.696 1.024 1.587 1.024 2.675 0 3.833-2.33 4.675-4.552 4.922.355.308.675.916.675 1.846 0 1.334-.012 2.41-.012 2.737 0 .267.178.577.687.479C19.146 20.115 22 16.379 22 11.974 22 6.465 17.535 2 12.026 2z"
+        ></path>
+      </svg>
+    </a>
+  </p>
+Selecting a .caustic file will convert its sequence data to a MIDI file using
+<a href="https://github.com/SatyrDiamond/DawVert">DawVert</a> script created by SatyrDiamond.
+ 
+<br/><br/>
+
+Please note that only .caustic files created using the latest version of Caustic 3 are supported. <br/>
+Attempting to convert demo project files (CAUSTIC STORM.caustic, HALF LIFE.caustic,  SawSynth Demo.caustic, WELCOME TO CAUSTIC.caustic) or files from older versions may result in unexpected behavior.<br/><br/>
+
+  <button id="fileInput"  type="button" class="btn btn-outline-primary btn-block">Select .caustic file</button>
+  <div id="log"></div>
+  <script type="text/javascript">
+     function log(message) {
+      const logElement = document.getElementById('log');
+      const newLog = document.createElement('p');
+      newLog.textContent = message;
+      logElement.appendChild(newLog);
+    }
+
+    async function javascript_button() {
+      //https://stackoverflow.com/questions/75806497/select-and-read-a-file-from-users-filesystem/75830339#75830339
+      // Get the file contents into JS
+      const [fileHandle] = await showOpenFilePicker();
+      const fileData = await fileHandle.getFile();
+      const contents = await fileData.text();
+      const fileName = fileData.name;
+
+      const extension = fileName.split('.').pop();
+
+      if (extension !== 'caustic') {
+        log('Invalid file format. Please select a .caustic file.')
+        return false;
+      }
+
+      log('input file:');
+      log(fileName);
+      log(' ');
+      log('(1/5)convert to Uint8Array data');
+      const reader = new FileReader();
+      let uint8Array;
+      reader.onload = () => {
+        const arrayBuffer = reader.result;
+        uint8Array = new Uint8Array(arrayBuffer);
+      };
+      reader.readAsArrayBuffer(fileData);
+      
+      log('(2/5)install pyodide python packages...');
+
+      let pyodide = await loadPyodide();
+      await pyodide.loadPackage("micropip");
+      const micropip = pyodide.pyimport("micropip");
+      await micropip.install('numpy');     await micropip.install('pillow');
+      await micropip.install('lxml');      await micropip.install('tinydb');
+      await micropip.install('mido');      await micropip.install('chardet');
+      await micropip.install('beautifulsoup4');      await micropip.install('sqlite3');
+      
+      //await micropip.install('https://koisignal.com/dawvertplus-0.0.1-py3-none-any.whl');
+      //await pyodide.loadPackage("../wheel-module/dist/dawvertplus-0.0.1-py3-none-any.whl");
+      await pyodide.loadPackage("./dawvertplus-0.0.1-py3-none-any.whl");
+      
+      log('(3/5)run python code');
+
+      let convert_bin = pyodide.runPython(`
+from pyodide.ffi import to_js
+from pyodide.ffi import JsProxy
+from io import BytesIO
+from dawvertplus import version
+from dawvertplus import caustic2midi
+
+def convert_bin(_fileName,_uint8Array):
+    fileobject = _uint8Array
+    headername = fileobject.subarray(0, 4)
+    header_topy = headername.to_py()
+    header_bytesio = BytesIO(headername.to_py().tobytes())
+
+    print("caustic2 midi function")
+    result_data = caustic2midi(_fileName,fileobject.to_py().tobytes())
+    print(_uint8Array.BYTES_PER_ELEMENT)
+    print("type result_data")
+    print(type(result_data))
+
+    import base64
+
+    bytes_data = result_data.tobytes()
+    base64_data = base64.b64encode(bytes_data).decode('utf-8')
+
+    return to_js(base64_data) 
+
+convert_bin
+      `);
+
+      //let result = convert(contents);
+      //console.log(result);
+      
+      let result_bin = convert_bin(fileName,uint8Array);
+      console.log(typeof result_bin);
+      const base64String = result_bin;
+
+      log('(4/5)convert result data to midi file');
+      const binaryString = window.atob(base64String);
+
+      const arrayBuffer = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+          arrayBuffer[i] = binaryString.charCodeAt   
+      (i);
+      }
+
+      log('(5/5)prepare downloadable link of output midi');
+      const blob_bin = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+      //const blob = new Blob([result], { type: 'application/text' });
+
+      let url = window.URL.createObjectURL(blob_bin);
+
+      var downloadLink = document.createElement("a");
+      downloadLink.href = url;
+      downloadLink.text = "Download output";
+      downloadLink.download = "out.midi";
+      document.body.appendChild(downloadLink);
+
+    }
+    const button = document.querySelector('#fileInput');
+    button.addEventListener('click', javascript_button);
+
+    async function js_interface_test() {
+      let pyodide = await loadPyodide();
+      const code = `
+from datetime import datetime
+import js
+now = datetime.now()
+now.strftime("%Y-%m-%d-%H-%M-%S-")
+x = "text in python code"
+
+async def process_file(event):
+    fileList = event.target.files.to_py()
+
+    for f in fileList:
+        data = await f.text()
+        document.getElementById("content").innerHTML = data.lower()
+
+def main_pyscript1():
+    # Create a Python proxy for the callback function
+    # process_file() is your function to process events from FileReader
+    file_event = create_proxy(process_file)
+
+    # Set the listener to the callback
+    e = document.getElementById("myfile")
+    e.addEventListener("change", file_event, False)
+
+`;
+      pyodide.runPython(code);
+      let x = pyodide.globals.get("x");
+      console.log(x)
+    };
+
+    js_interface_test();
+
+    const dropArea = document.getElementById('drop-area');
+
+    ['drag', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false)
+    });
+
+    ['drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, handleDrop, false)
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    function handleDrop(e) {
+      preventDefaults(e);
+      console.log('handle drop');
+      const dt = e.dataTransfer
+      const files = dt.files
+      handleFileSelect(files)
+    }
+
+    async function handleFileSelect(files) {
+    }
+
+  </script>
+  <br />
+</body>
+
+</html>

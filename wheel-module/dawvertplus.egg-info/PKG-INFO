@@ -1,0 +1,22 @@
+Metadata-Version: 2.1
+Name: dawvertplus
+Version: 0.0.1
+Summary: dawvert wheel module for pyodide
+Home-page: https://github.com/pypa/sampleproject
+Author: koisignal
+Author-email: 
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pillow
+Requires-Dist: lxml
+Requires-Dist: tinydb
+Requires-Dist: mido
+Requires-Dist: chardet
+Requires-Dist: beautifulsoup4
+
+foo

@@ -1,0 +1,6 @@
+numpy
+mido
+lxml
+chardet
+beautifulsoup4
+tinydb
